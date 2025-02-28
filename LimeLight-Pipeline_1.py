@@ -8,9 +8,10 @@ def calculate_angle(contour):
     (x, y), (MA, ma), angle = cv2.fitEllipse(contour)
     return angle
 
-def draw_info(image, color, angle, center, index, area):
+def draw_info(image, color, angle, center, index, distance):
     cv2.putText(image, f"#{index}: {color}", (center[0] - 40, center[1] - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
     cv2.putText(image, f"Angle: {angle:.2f}", (center[0] - 40, center[1] - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+    cv2.putText(image, f"dis: {distance:.2f}", (center[0] - 40, center[1] - 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
     cv2.circle(image, center, 5, (0, 255, 0), -1)
     cv2.line(image, center, (int(center[0] + 50 * math.cos(math.radians(90 - angle))),
                              int(center[1] - 50 * math.sin(math.radians(90 - angle)))), (0, 255, 0), 2)
@@ -32,6 +33,30 @@ def process_color(frame, mask, color_name, color_bgr):
 def are_samples_close(center1, center2, threshold=100):
     return np.linalg.norm(np.array(center1) - np.array(center2)) < threshold
 
+
+def calculate_distance(x1, y1, x2, y2):
+    return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+
+def get_lowest_middle_point(contour):
+    # Calculate the moments of the contour
+    M = cv2.moments(contour)
+
+    # Calculate the center of the contour using the moments
+    if M["m00"] == 0:
+        return float('inf')  # To avoid division by zero
+
+    center_x = int(M["m10"] / M["m00"])
+    center_y = int(M["m01"] / M["m00"])
+
+    # The lowest middle point of the screen is (320, 480)
+    lowest_point = (320, 480)
+
+    # Calculate the Euclidean distance from the center of the contour to the lowest middle point
+    distance = np.sqrt((center_x - lowest_point[0]) ** 2 + (center_y - lowest_point[1]) ** 2)
+
+    return distance
+
 def runPipeline(frame, llrobot):
     HSV_BLUE_RANGE = ([90, 120, 40], [140, 255, 255])
     HSV_RED_RANGE_1 = ([0, 120, 40], [10, 255, 255])
@@ -39,6 +64,9 @@ def runPipeline(frame, llrobot):
     HSV_YELLOW_RANGE = ([20, 120, 40], [40, 255, 255])
     SMALL_CONTOUR_AREA = 200
     MIN_BRIGHTNESS_THRESHOLD = 60
+
+    frame_center_x = 640 / 2
+    lowest_distance = 1000
 
     largest_contour = np.array([[]])
     largest_sample_angle = 0
@@ -76,18 +104,21 @@ def runPipeline(frame, llrobot):
                 continue
 
             center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+            center_array = np.array(center)
             angle = calculate_angle(sample)
             area = cv2.contourArea(sample)
+            distance = calculate_distance(center_array[0], center_array[1], 320, 480)
 
             cv2.drawContours(frame, [sample], 0, color_bgr, 2)
-            draw_info(frame, color, angle, center, i + 1, area)
+            draw_info(frame, color, angle, center, i + 1, distance)
 
-            if area > largest_sample_area:
+            if distance < lowest_distance:
                 largest_sample_area = area
                 largest_sample_angle = angle
                 largest_contour = sample
+                lowest_distance = distance
 
-            close_samples.append((center, color, angle, area))
+            close_samples.append((center, color, angle, distance))
 
     # Check for close samples
     for i in range(len(close_samples)):
