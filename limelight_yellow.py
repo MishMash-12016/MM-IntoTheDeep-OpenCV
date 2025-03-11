@@ -39,12 +39,14 @@ from collections import defaultdict
 
 # Constants for filtering contours
 SMALL_CONTOUR_AREA = 300
+LARGEST_CONTOUR_AREA = 2000
+
 
 # Minimum average brightness threshold (0-255)
 MIN_BRIGHTNESS_THRESHOLD = 50
 
 # Color detection ranges for yellow in HSV
-HSV_YELLOW_RANGE = ([15, 60, 100], [80, 255, 255])
+HSV_YELLOW_RANGE = ([10, 180, 90], [30, 255, 255])
 
 # Edge detection parameters - initial values
 BLUR_SIZE = 17
@@ -55,12 +57,11 @@ MIN_ASPECT_RATIO = 1.5  # Minimum width/height ratio
 MAX_ASPECT_RATIO = 6.0  # Maximum width/height ratio
 
 # Vertical position threshold (in pixels from bottom)
-VERTICAL_THRESHOLD = 200  # Adjust this value as needed
+VERTICAL_THRESHOLD = 135  # Adjust this value as needed
 
 tracked_contour = None
 tracked_center = None
 DISTANCE_THRESHOLD = 50  # pixels, adjust as needed
-
 
 def calculate_angle(contour):
     if len(contour) < 5:
@@ -68,18 +69,13 @@ def calculate_angle(contour):
     (x, y), (MA, ma), angle = cv2.fitEllipse(contour)
     return angle
 
-
 def draw_info(image, color, angle, center, index, area):
-    cv2.putText(image, f"#{index}: {color}", (center[0] - 40, center[1] - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                (0, 255, 0), 2)
-    cv2.putText(image, f"Angle: {angle:.2f}", (center[0] - 40, center[1] - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                (250, 255, 0), 2)
-    cv2.putText(image, f"Area: {area:.2f}", (center[0] - 40, center[1] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                (0, 255, 0), 2)
+    cv2.putText(image, f"#{index}: {color}", (center[0] - 40, center[1] - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    cv2.putText(image, f"Angle: {angle:.2f}", (center[0] - 40, center[1] - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (250, 255, 0), 2)
+    cv2.putText(image, f"Area: {area:.2f}", (center[0] - 40, center[1] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
     cv2.circle(image, center, 5, (0, 255, 0), -1)
-    cv2.line(image, center, (int(center[0] + 50 * math.cos(math.radians(90 - angle))),
+    cv2.line(image, center, (int(center[0] + 50 * math.cos(math.radians(90 - angle))), 
                              int(center[1] - 50 * math.sin(math.radians(90 - angle)))), (0, 255, 0), 2)
-
 
 def separate_touching_contours(contour, min_area_ratio=0.15):
     x, y, w, h = cv2.boundingRect(contour)
@@ -108,44 +104,42 @@ def separate_touching_contours(contour, min_area_ratio=0.15):
         return [c + [x, y] for c in max_contours]
     return [contour]
 
-
 def pipeline_debug_return(frame):
     return None, None, None, True, frame
 
-
 def process_color(frame, mask):
     debug_info = None
-    # return pipeline_debug_return(frame)
+    #return pipeline_debug_return(frame)
     kernel = np.ones((5, 5), np.uint8)
-    masked_frame = cv2.bitwise_and(frame, frame, mask=mask) if 1 else frame
-    # return pipeline_debug_return(masked_frame)
-    gray_masked = cv2.cvtColor(masked_frame, cv2.COLOR_BGR2GRAY) if 1 else masked_frame
-    # return pipeline_debug_return(gray_masked)
-    gray_boosted = cv2.addWeighted(gray_masked, 1.5, mask, 0.5, 0) if 0 else gray_masked
-    # return pipeline_debug_return(gray_boosted)
+    masked_frame = cv2.bitwise_and(frame, frame, mask=mask)  if 1 else frame
+    #return pipeline_debug_return(masked_frame)
+    gray_masked = cv2.cvtColor(masked_frame, cv2.COLOR_BGR2GRAY)  if 1 else masked_frame
+    #return pipeline_debug_return(gray_masked)
+    gray_boosted = cv2.addWeighted(gray_masked, 1.5, mask, 0.5, 0)  if 0 else gray_masked
+    #return pipeline_debug_return(gray_boosted)
     blurred = cv2.GaussianBlur(gray_boosted, (3, 3), 0) if 1 else gray_boosted
-    # return pipeline_debug_return(blurred)
+    #return pipeline_debug_return(blurred)
 
     sobelx = cv2.Sobel(blurred, cv2.CV_32F, 1, 0, ksize=1)
     sobely = cv2.Sobel(blurred, cv2.CV_32F, 0, 1, ksize=1)
 
-    magnitude = np.sqrt(sobelx ** 2 + sobely ** 2)
+    magnitude = np.sqrt(sobelx**2 + sobely**2)
     magnitude = np.uint8(magnitude * 255 / np.max(magnitude))
-    # return pipeline_debug_return(magnitude)
+    #return pipeline_debug_return(magnitude)
 
     _, edges = cv2.threshold(magnitude, 50, 255, cv2.THRESH_BINARY) if 1 else magnitude
-    # return pipeline_debug_return(edges)
+    #return pipeline_debug_return(edges)
 
     edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel) if 1 else edges
-    # return pipeline_debug_return(edges)
+    #return pipeline_debug_return(edges)
     edges = cv2.dilate(edges, np.ones((3, 3), np.uint8), iterations=1) if 1 else edges
-    # return pipeline_debug_return(edges)
+    #return pipeline_debug_return(edges)
     edges = cv2.bitwise_not(edges) if 1 else edges
-    # return pipeline_debug_return(edges)
+    #return pipeline_debug_return(edges)
     edges = cv2.bitwise_and(edges, edges, mask=mask) if 1 else edges
-    # return pipeline_debug_return(edges)
+    #return pipeline_debug_return(edges)
     edges = cv2.GaussianBlur(edges, (3, 3), 0) if 1 else edges
-    # return pipeline_debug_return(edges)
+    #return pipeline_debug_return(edges)
     contours, hierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     return contours, hierarchy, gray_masked, False, debug_info
 
@@ -153,23 +147,22 @@ def process_color(frame, mask):
 def debug_return(frame):
     return np.array([[]]), frame, [0, 0, 0, 0, 0, 0, 0, 0]
 
-
 def runPipeline(frame, llrobot):
     global tracked_contour, tracked_center
-
+    
     try:
         # Initialize Limelight-style output
         llpython = [0, 0, 0, 0, 0, 0, 0, 0]
         closest_contour = np.array([[]])
         min_distance = float('inf')
-
+        
         # Calculate the middle bottom point of the image
-        middle_bottom = (frame.shape[1] // 2, frame.shape[0] - 1)
-
+        middle_bottom = (frame.shape[1] // 2 -160, frame.shape[0] - 1)
+        
         # Convert to HSV and denoise
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         hsv_denoised = cv2.GaussianBlur(hsv, (5, 5), 0)
-
+        
         # Create mask for yellow
         yellow_mask = cv2.inRange(hsv_denoised, np.array(HSV_YELLOW_RANGE[0]), np.array(HSV_YELLOW_RANGE[1]))
         yellow_mask = cv2.erode(yellow_mask, np.ones((3, 3), np.uint8))
@@ -181,7 +174,7 @@ def runPipeline(frame, llrobot):
 
         valid_contours = []
         for i, contour in enumerate(yellow_contours):
-            if cv2.contourArea(contour) < SMALL_CONTOUR_AREA:
+            if cv2.contourArea(contour) < SMALL_CONTOUR_AREA or cv2.contourArea(contour) > LARGEST_CONTOUR_AREA:
                 continue
 
             # Check aspect ratio using minAreaRect
@@ -190,7 +183,7 @@ def runPipeline(frame, llrobot):
             height = min(rect[1])
             if width == 0 or height == 0:
                 continue
-
+                
             aspect_ratio = width / height
             if aspect_ratio < MIN_ASPECT_RATIO or aspect_ratio > MAX_ASPECT_RATIO:
                 continue
@@ -207,16 +200,16 @@ def runPipeline(frame, llrobot):
                     continue
 
                 center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-
+                
                 # Skip if contour is below vertical threshold
                 if center[1] < frame.shape[0] - VERTICAL_THRESHOLD:
                     continue
-
+                    
                 angle = calculate_angle(sep_contour)
                 area = cv2.contourArea(sep_contour)
 
                 # Calculate distance to middle bottom point
-                distance = np.sqrt((center[0] - middle_bottom[0]) ** 2 + (center[1] - middle_bottom[1]) ** 2)
+                distance = np.sqrt((center[0] - middle_bottom[0])**2 + (center[1] - middle_bottom[1])**2)
 
                 # Store valid contour info
                 valid_contours.append({
@@ -237,22 +230,20 @@ def runPipeline(frame, llrobot):
                         closest_contour = contour_info['contour']
                         tracked_contour = closest_contour
                         tracked_center = contour_info['center']
-                        llpython = [1, tracked_center[0], tracked_center[1], contour_info['angle'],
-                                    len(yellow_contours), min_distance, 0, 0]
+                        llpython = [1, tracked_center[0], tracked_center[1], contour_info['angle'], len(yellow_contours), min_distance, 0, 0]
             else:
                 # Check if the tracked contour is still visible
                 tracked_contour_found = False
                 for contour_info in valid_contours:
-                    distance_to_tracked = np.sqrt((contour_info['center'][0] - tracked_center[0]) ** 2 +
-                                                  (contour_info['center'][1] - tracked_center[1]) ** 2)
+                    distance_to_tracked = np.sqrt((contour_info['center'][0] - tracked_center[0])**2 + 
+                                                (contour_info['center'][1] - tracked_center[1])**2)
                     if distance_to_tracked < DISTANCE_THRESHOLD:
                         tracked_contour_found = True
                         tracked_contour = contour_info['contour']
                         tracked_center = contour_info['center']
-                        llpython = [1, tracked_center[0], tracked_center[1], contour_info['angle'],
-                                    len(yellow_contours), distance_to_tracked, 0, 0]
+                        llpython = [1, tracked_center[0], tracked_center[1], contour_info['angle'], len(yellow_contours), distance_to_tracked, 0, 0]
                         break
-
+                
                 if not tracked_contour_found:
                     # Tracked contour lost, reset tracking
                     tracked_contour = None
@@ -262,8 +253,8 @@ def runPipeline(frame, llrobot):
         for contour_info in valid_contours:
             color = (0, 255, 0) if np.array_equal(contour_info['contour'], tracked_contour) else (0, 0, 255)
             cv2.drawContours(frame, [contour_info['contour']], -1, color, 2)
-            draw_info(frame, "Yellow", contour_info['angle'], contour_info['center'],
-                      contour_info['index'] + 1, contour_info['area'])
+            draw_info(frame, "Yellow", contour_info['angle'], contour_info['center'], 
+                     contour_info['index'] + 1, contour_info['area'])
 
         # Draw the middle bottom point
         cv2.circle(frame, middle_bottom, 5, (255, 0, 0), -1)
