@@ -39,6 +39,8 @@ from collections import defaultdict
 
 # Constants for filtering contours
 SMALL_CONTOUR_AREA = 300
+LARGEST_CONTOUR_AREA = 2000
+
 
 # Minimum average brightness threshold (0-255)
 MIN_BRIGHTNESS_THRESHOLD = 50
@@ -54,7 +56,7 @@ MIN_ASPECT_RATIO = 1.5  # Minimum width/height ratio
 MAX_ASPECT_RATIO = 6.0  # Maximum width/height ratio
 
 # Vertical position threshold (in pixels from bottom)
-VERTICAL_THRESHOLD = 200  # Adjust this value as needed
+VERTICAL_THRESHOLD = 135  # Adjust this value as needed
 
 tracked_contour = None
 tracked_center = None
@@ -72,7 +74,7 @@ def draw_info(image, color, angle, center, index, area):
     cv2.putText(image, f"Area: {area:.2f}", (center[0] - 40, center[1] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
     cv2.circle(image, center, 5, (0, 255, 0), -1)
     cv2.line(image, center, (int(center[0] + 50 * math.cos(math.radians(90 - angle))), 
-                             int(center[1] - 50 * math.sin(math.radians(90 - angle)))), (0, 255, 0), 2)
+                             int(center[1] - 50 * math.sin(math.radians(90 - angle)))), (0, 0, 0), 2)
 
 def separate_touching_contours(contour, min_area_ratio=0.15):
     x, y, w, h = cv2.boundingRect(contour)
@@ -153,7 +155,7 @@ def runPipeline(frame, llrobot):
         min_distance = float('inf')
         
         # Calculate the middle bottom point of the image
-        middle_bottom = (frame.shape[1] // 2, frame.shape[0] - 1)
+        middle_point = (frame.shape[1] // 2 - 160, frame.shape[0] - 1)
         
         # Convert to HSV and denoise
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -161,8 +163,8 @@ def runPipeline(frame, llrobot):
         
         # --- Red color mask creation ---
         # Define two ranges for red because red spans the hue boundary
-        HSV_RED_LOWER = ([0, 70, 50], [10, 255, 255])
-        HSV_RED_UPPER = ([170, 70, 50], [180, 255, 255])
+        HSV_RED_LOWER = ([0, 90, 50], [20, 255, 255])
+        HSV_RED_UPPER = ([160, 70, 50], [180, 255, 255])
         red_mask_lower = cv2.inRange(hsv_denoised, np.array(HSV_RED_LOWER[0]), np.array(HSV_RED_LOWER[1]))
         red_mask_upper = cv2.inRange(hsv_denoised, np.array(HSV_RED_UPPER[0]), np.array(HSV_RED_UPPER[1]))
         red_mask = cv2.bitwise_or(red_mask_lower, red_mask_upper)
@@ -175,7 +177,7 @@ def runPipeline(frame, llrobot):
         
         valid_contours = []
         for i, contour in enumerate(red_contours):
-            if cv2.contourArea(contour) < SMALL_CONTOUR_AREA:
+            if cv2.contourArea(contour) < SMALL_CONTOUR_AREA or cv2.contourArea(contour) > LARGEST_CONTOUR_AREA:
                 continue
 
             # Check aspect ratio using minAreaRect
@@ -208,7 +210,9 @@ def runPipeline(frame, llrobot):
                 area = cv2.contourArea(sep_contour)
 
                 # Calculate distance to middle bottom point
-                distance = np.sqrt((center[0] - middle_bottom[0])**2 + (center[1] - middle_bottom[1])**2)
+                distance = np.sqrt((center[0] - middle_point
+    [0])**2 + (center[1] - middle_point
+    [1])**2)
 
                 # Store valid contour info
                 valid_contours.append({
@@ -257,7 +261,7 @@ def runPipeline(frame, llrobot):
                       contour_info['index'] + 1, contour_info['area'])
 
         # Draw the middle bottom point
-        cv2.circle(frame, middle_bottom, 5, (255, 0, 0), -1)
+        cv2.circle(frame, middle_point, 5, (255, 0, 0), -1)
 
         return tracked_contour if tracked_contour is not None else np.array([[]]), frame, llpython
 
