@@ -39,12 +39,13 @@ from collections import defaultdict
 
 # Constants for filtering contours
 SMALL_CONTOUR_AREA = 300
+LARGEST_CONTOUR_AREA = 2000
 
 # Minimum average brightness threshold (0-255)
 MIN_BRIGHTNESS_THRESHOLD = 50
 
 # Color detection ranges for yellow in HSV
-HSV_BLUE_RANGE = ([90, 60, 100], [130, 255, 255])
+HSV_BLUE_RANGE = ([90, 60, 100], [140, 255, 255])
 
 # Edge detection parameters - initial values
 BLUR_SIZE = 17
@@ -55,7 +56,7 @@ MIN_ASPECT_RATIO = 1.5  # Minimum width/height ratio
 MAX_ASPECT_RATIO = 6.0  # Maximum width/height ratio
 
 # Vertical position threshold (in pixels from bottom)
-VERTICAL_THRESHOLD = 200  # Adjust this value as needed
+VERTICAL_THRESHOLD = 135  # Adjust this value as needed
 
 tracked_contour = None
 tracked_center = None
@@ -164,7 +165,7 @@ def runPipeline(frame, llrobot):
         min_distance = float('inf')
 
         # Calculate the middle bottom point of the image
-        middle_bottom = (frame.shape[1] // 2, frame.shape[0] - 1)
+        middle_bottom = (frame.shape[1] // 2 -160, frame.shape[0] - 1)
 
         # Convert to HSV and denoise
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -181,7 +182,7 @@ def runPipeline(frame, llrobot):
 
         valid_contours = []
         for i, contour in enumerate(yellow_contours):
-            if cv2.contourArea(contour) < SMALL_CONTOUR_AREA:
+            if cv2.contourArea(contour) < SMALL_CONTOUR_AREA or cv2.contourArea(contour) > LARGEST_CONTOUR_AREA:
                 continue
 
             # Check aspect ratio using minAreaRect
