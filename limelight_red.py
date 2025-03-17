@@ -56,7 +56,7 @@ MIN_ASPECT_RATIO = 1.5  # Minimum width/height ratio
 MAX_ASPECT_RATIO = 6.0  # Maximum width/height ratio
 
 # Vertical position threshold (in pixels from bottom)
-VERTICAL_THRESHOLD = 128  # Adjust this value as needed
+VERTICAL_THRESHOLD = 120  # Adjust this value as needed
 X_LIMIT_AUTO = 190  # Adjust this value as needed
 
 
@@ -186,8 +186,8 @@ def runPipeline(frame, llrobot):
         hsv_denoised = cv2.GaussianBlur(hsv, (5, 5), 0)
 
         # Create mask for yellow
-        HSV_RED_LOWER = ([0, 90, 50], [20, 255, 255])
-        HSV_RED_UPPER = ([160, 70, 50], [180, 255, 255])
+        HSV_RED_LOWER = ([0, 70, 50], [10, 255, 255])
+        HSV_RED_UPPER = ([170, 70, 50], [180, 255, 255])
         red_mask_lower = cv2.inRange(hsv_denoised, np.array(HSV_RED_LOWER[0]), np.array(HSV_RED_LOWER[1]))
         red_mask_upper = cv2.inRange(hsv_denoised, np.array(HSV_RED_UPPER[0]), np.array(HSV_RED_UPPER[1]))
         red_mask = cv2.bitwise_or(red_mask_lower, red_mask_upper)
