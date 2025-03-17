@@ -56,8 +56,8 @@ MIN_ASPECT_RATIO = 1.5  # Minimum width/height ratio
 MAX_ASPECT_RATIO = 6.0  # Maximum width/height ratio
 
 # Vertical position threshold (in pixels from bottom)
-VERTICAL_THRESHOLD = 138  # Adjust this value as needed
-X_LIMIT_AUTO =165
+VERTICAL_THRESHOLD = 145  # Adjust this value as needed
+X_LIMIT_AUTO = 190  # Adjust this value as needed
 
 tracked_contour = None
 tracked_center = None
@@ -155,15 +155,12 @@ def process_color(frame, mask):
 def debug_return(frame):
     return np.array([[]]), frame, [0, 0, 0, 0, 0, 0, 0, 0]
 
+
 def draw_threshold_blocks(image):
     height, width = image.shape[:2]
+
     # Draw upper block
     cv2.rectangle(image, (0, 0), (width, VERTICAL_THRESHOLD - 22), (0, 0, 0), -1)
-
-def draw_x_limit_auto(image):
-    height, width = image.shape[:2]
-    cv2.rectangle(image, (0, 0), (X_LIMIT_AUTO, height), (0, 0, 0), -1)  # Red rectangle
-
 
 
 def runPipeline(frame, llrobot):
@@ -175,7 +172,7 @@ def runPipeline(frame, llrobot):
         closest_contour = np.array([[]])
         min_distance = float('inf')
 
-        # Fixed reference point for distance calculations
+        # Set the reference point to (320, 0)
         reference_point = (320, 0)
 
         # Convert to HSV and denoise
@@ -186,7 +183,7 @@ def runPipeline(frame, llrobot):
         blue_mask = cv2.inRange(hsv_denoised, np.array(HSV_BLUE_RANGE[0]), np.array(HSV_BLUE_RANGE[1]))
         blue_mask = cv2.erode(blue_mask, np.ones((3, 3), np.uint8))
 
-        # Process blue color
+        # Process yellow color
         blue_contours, blue_hierarchy, blue_gray, isDebug, debug_info = process_color(frame, blue_mask)
         if isDebug:
             return debug_return(debug_info)
@@ -220,17 +217,17 @@ def runPipeline(frame, llrobot):
 
                 center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
-                # Skip if contour is below vertical threshold
-                if center[1] < frame.shape[0] - VERTICAL_THRESHOLD:
+              # Skip if contour is above vertical threshold (now measured from top)
+                if center[1] < VERTICAL_THRESHOLD:
                     continue
 
-                if center[0] < frame.shape[1] - X_LIMIT_AUTO and llrobot[2] == 1:
+                if center[0] < X_LIMIT_AUTO and llrobot[2] == 1:
                     continue
 
                 angle = calculate_angle(sep_contour)
                 area = cv2.contourArea(sep_contour)
 
-                # Calculate distance to reference point
+                # Calculate distance to reference point (320, 0)
                 distance = np.sqrt((center[0] - reference_point[0]) ** 2 + (center[1] - reference_point[1]) ** 2)
 
                 # Store valid contour info
@@ -253,20 +250,22 @@ def runPipeline(frame, llrobot):
                         closest_contour = contour_info['contour']
                         tracked_contour = closest_contour
                         tracked_center = contour_info['center']
-                        llpython = [1, tracked_center[0], tracked_center[1], contour_info['angle'], len(blue_contours), min_distance, 0, 0]
+                        llpython = [1, tracked_center[0], tracked_center[1], contour_info['angle'], len(blue_contours),
+                                    min_distance, 0, 0]
             else:
                 # Check if the tracked contour is still visible
                 tracked_contour_found = False
                 for contour_info in valid_contours:
-                    distance_to_tracked = np.sqrt((contour_info['center'][0] - tracked_center[0])**2 + 
-                                                (contour_info['center'][1] - tracked_center[1])**2)
+                    distance_to_tracked = np.sqrt((contour_info['center'][0] - tracked_center[0]) ** 2 +
+                                                  (contour_info['center'][1] - tracked_center[1]) ** 2)
                     if distance_to_tracked < DISTANCE_THRESHOLD:
                         tracked_contour_found = True
                         tracked_contour = contour_info['contour']
                         tracked_center = contour_info['center']
-                        llpython = [1, tracked_center[0], tracked_center[1], contour_info['angle'], len(blue_contours), distance_to_tracked, 0, 0]
+                        llpython = [1, tracked_center[0], tracked_center[1], contour_info['angle'], len(blue_contours),
+                                    distance_to_tracked, 0, 0]
                         break
-                
+
                 if not tracked_contour_found:
                     # Tracked contour lost, reset tracking
                     tracked_contour = None
@@ -284,7 +283,7 @@ def runPipeline(frame, llrobot):
 
         draw_threshold_blocks(frame)
 
-        draw_x_limit_auto(frame)
+        #draw_x_limit_auto(frame)
 
         return tracked_contour if tracked_contour is not None else np.array([[]]), frame, llpython
 
