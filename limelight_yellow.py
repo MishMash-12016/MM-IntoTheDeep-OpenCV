@@ -46,7 +46,7 @@ LARGEST_CONTOUR_AREA = 2000
 MIN_BRIGHTNESS_THRESHOLD = 50
 
 # Color detection ranges for yellow in HSV
-HSV_YELLOW_RANGE = ([10, 180, 90], [30, 255, 255])
+HSV_YELLOW_RANGE = ([0, 154, 100], [44, 255, 255])#([0, 0, 0], [0, 0, 0])
 
 # Edge detection parameters - initial values
 BLUR_SIZE = 17
