@@ -39,13 +39,10 @@ from collections import defaultdict
 
 # Constants for filtering contours
 SMALL_CONTOUR_AREA = 300
-LARGEST_CONTOUR_AREA = 2000
+LARGEST_CONTOUR_AREA = 100000
 
 # Minimum average brightness threshold (0-255)
 MIN_BRIGHTNESS_THRESHOLD = 50
-
-# Color detection ranges for yellow in HSV
-HSV_YELLOW_RANGE = ([10, 180, 90], [30, 255, 255])
 
 # Edge detection parameters - initial values
 BLUR_SIZE = 17
@@ -54,10 +51,6 @@ SOBEL_KERNEL = 3
 # Aspect ratio range for contour filtering
 MIN_ASPECT_RATIO = 1.5  # Minimum width/height ratio
 MAX_ASPECT_RATIO = 6.0  # Maximum width/height ratio
-
-# Vertical position threshold (in pixels from bottom)
-VERTICAL_THRESHOLD = 120  # Adjust this value as needed
-X_LIMIT_AUTO = 190  # Adjust this value as needed
 
 
 tracked_contour = None
@@ -163,11 +156,22 @@ def draw_threshold_blocks(image):
     # Draw upper block
     cv2.rectangle(image, (0, 0), (width, VERTICAL_THRESHOLD - 22), (0, 0, 0), -1)
 
-def draw_x_limit_auto(image):
-    height, width = image.shape[:2]
-    cv2.rectangle(image, (0, 0), (X_LIMIT_AUTO, height), (0, 0, 0), -1)  # Red rectangle
 
+def crop_and_draw(image, x, y, width, height):
 
+    # Create a black mask of the same size as the input image
+    mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    
+    # Define the crop region on the mask
+    mask[y:y+height, x:x+width] = 255
+    
+    # Apply the mask to the image
+    cropped_image = cv2.bitwise_and(image, image, mask=mask)
+    
+    # Draw the crop region on the original image
+    cv2.rectangle(image, (x, y), (x+width, y+height), (0, 255, 0), 2)
+    
+    return cropped_image
 
 def runPipeline(frame, llrobot):
     global tracked_contour, tracked_center
@@ -177,9 +181,15 @@ def runPipeline(frame, llrobot):
         llpython = [0, 0, 0, 0, 0, 0, 0, 0]
         closest_contour = np.array([[]])
         min_distance = float('inf')
+        if llrobot[3] == 0:
+            crop_x =140
+            crop_y = 50
+            crop_width = 70
+            crop_height =70
+            frame = crop_and_draw(frame, crop_x, crop_y, crop_width, crop_height)
 
         # Set the reference point to (320, 0)
-        reference_point = (320, 0)
+        reference_point = (226, 119)
 
         # Convert to HSV and denoise
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -200,7 +210,7 @@ def runPipeline(frame, llrobot):
             return debug_return(debug_info)
         valid_contours = []
         for i, contour in enumerate(red_contours):
-            if cv2.contourArea(contour) < SMALL_CONTOUR_AREA or cv2.contourArea(contour) > LARGEST_CONTOUR_AREA:
+            if cv2.contourArea(contour) < SMALL_CONTOUR_AREA:
                 continue
 
             # Check aspect ratio using minAreaRect
@@ -226,13 +236,6 @@ def runPipeline(frame, llrobot):
                     continue
 
                 center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-
-                # Skip if contour is above vertical threshold (now measured from top)
-                if center[1] < VERTICAL_THRESHOLD:
-                    continue
-
-                if center[0] < X_LIMIT_AUTO and llrobot[2] == 1:
-                    continue
 
                 angle = calculate_angle(sep_contour)
                 area = cv2.contourArea(sep_contour)
@@ -285,13 +288,12 @@ def runPipeline(frame, llrobot):
         for contour_info in valid_contours:
             color = (0, 255, 0) if np.array_equal(contour_info['contour'], tracked_contour) else (0, 0, 255)
             cv2.drawContours(frame, [contour_info['contour']], -1, color, 2)
-            draw_info(frame, "Yellow", contour_info['angle'], contour_info['center'],
+            draw_info(frame, "Green", contour_info['angle'], contour_info['center'],
                       contour_info['index'] + 1, contour_info['area'])
 
         # Draw the reference point
         cv2.circle(frame, reference_point, 5, (255, 0, 0), -1)
 
-        draw_threshold_blocks(frame)
 
         return tracked_contour if tracked_contour is not None else np.array([[]]), frame, llpython
 
