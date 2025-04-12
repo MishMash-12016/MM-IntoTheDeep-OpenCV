@@ -14,12 +14,10 @@ def runPipeline(image, llrobot):
     largestContour = np.array([[]])
     llpython = [0, 0, 0, 0, 0, 0, 0, 0]
     angle = 0
-
+    longest_line = None
     
-    #llrobot = [0, 0, 0, 44, 55, 130, 120, 0]
-
     # Step 1: Crop the image
-    crop_x, crop_y = 0,0
+    crop_x, crop_y = 0, 0
     crop_w, crop_h = 320, 240
     if llrobot[3] != 0:
         crop_x = int(llrobot[5])
@@ -41,6 +39,7 @@ def runPipeline(image, llrobot):
     mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
     mask = cv2.bitwise_or(mask1, mask2)
     mask = cv2.GaussianBlur(mask, (5, 5), 0)
+    mask = cv2.erode(mask, np.ones((3,3), np.uint8), iterations=1)
 
     # Step 4: Find contours in the mask
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -48,26 +47,11 @@ def runPipeline(image, llrobot):
     if contours:
         # Select the largest contour rather than concatenating all contours
         largest_contour = max(contours, key=cv2.contourArea)
-
-        # Get rotated rectangle from the largest contour
-        rect = cv2.minAreaRect(largest_contour)
-        box = cv2.boxPoints(rect)
-        box = np.int0(box)
-        angle = rect[2]
-        if angle < 0:
-            angle += 90
-
-        # Draw the rectangle and its center on the cropped image
-        cv2.drawContours(cropped, [box], 0, (0, 255, 0), 2)
-        cv2.circle(cropped, tuple(map(int, rect[0])), 5, (0, 0, 255), -1)
-
-
-
         # Step 5: If touching the border, use Hough Transform to incorporate the second (partial) rectangle
         edges = cv2.Canny(mask, 50, 150)
         lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=20, minLineLength=10, maxLineGap=5)
         longest_line_angle = None
-        if lines is not None :
+        if lines is not None:
             longest_length = 0
             for line in lines:
                 x1, y1, x2, y2 = line[0]
@@ -77,6 +61,7 @@ def runPipeline(image, llrobot):
                 length = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
                 if length > longest_length:
                     longest_length = length
+                    longest_line = line
                     # Calculate angle in degrees using atan2 (result in range -180 to 180)
                     longest_line_angle = math.degrees(math.atan2((y2 - y1), (x2 - x1)))
             # If a longest Hough line was found, use its angle
@@ -92,13 +77,15 @@ def runPipeline(image, llrobot):
             rect_hough = cv2.minAreaRect(pts)
             box_hough = cv2.boxPoints(rect_hough)
             box_hough = np.int0(box_hough)
-            cv2.drawContours(cropped, [box_hough], 0, (255, 0, 255), 2)
-            angle +=90
+            angle += 90
             llpython = [angle, 0, 0, 0, 0, 0, 0, 0]
         else:
-            angle +=90
+            angle += 90
             llpython = [angle, 0, 0, 0, 0, 0, 0, 0]
         largestContour = largest_contour
+    
+    if longest_line is not None:
+        cv2.line(cropped, (longest_line[0][0], longest_line[0][1]), (longest_line[0][2], longest_line[0][3]), (0, 0, 0), 2)
 
     # Step 6: Draw the crop rectangle on the original image
     cv2.rectangle(image, (crop_x, crop_y), (crop_x+crop_w, crop_y+crop_h), (255, 0, 0), 2)
@@ -108,5 +95,4 @@ def runPipeline(image, llrobot):
     drawDecorations(image, angle)
 
     # Instead of returning multiple values, return the angle of the longest Hough line (or the contour's angle if Hough not used)
-
     return largestContour, image, llpython
